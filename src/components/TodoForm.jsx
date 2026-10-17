@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Star, Tag, ChevronDown, ChevronUp, AlignLeft } from 'lucide-react';
-import { CATEGORIES, PRIORITY_OPTIONS, STATUS_OPTIONS } from '../constants/initialData';
+import { CATEGORIES, PRIORITY_OPTIONS, STATUS_OPTIONS } from '../constants/options';
 
 export default function TodoForm({ onAddTodo }) {
   const [title, setTitle] = useState('');

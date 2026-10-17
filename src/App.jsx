@@ -6,28 +6,14 @@ import TodoForm from "./components/TodoForm";
 import TodoFilters from "./components/TodoFilters";
 import TodoList from "./components/TodoList";
 import Toast from "./components/Toast";
-import { INITIAL_TODOS, INITIAL_USER } from "./constants/initialData";
+import { api } from "./api";
 
 export default function App() {
-  // Todos local state
-  const [todos, setTodos] = useState(() => {
-    try {
-      const savedTodos = localStorage.getItem("flowtask_todos");
-      return savedTodos ? JSON.parse(savedTodos) : INITIAL_TODOS;
-    } catch {
-      return INITIAL_TODOS;
-    }
-  });
-
-  // User profile local state
-  const [user, setUser] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem("flowtask_user");
-      return savedUser ? JSON.parse(savedUser) : INITIAL_USER;
-    } catch {
-      return INITIAL_USER;
-    }
-  });
+  // Server data
+  const [todos, setTodos] = useState([]);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   // Filter & Search states
   const [activeStatus, setActiveStatus] = useState("All");
@@ -41,22 +27,36 @@ export default function App() {
   // Toast feedback state
   const [toast, setToast] = useState(null);
 
-  // Enforce light mode on mount
+  // Enforce light mode on mount and drop data left over from the localStorage version
   useEffect(() => {
     document.documentElement.classList.remove("dark");
     document.documentElement.removeAttribute("data-theme");
-    localStorage.removeItem("flowtask_theme");
+    ["flowtask_theme", "flowtask_todos", "flowtask_user"].forEach((key) =>
+      localStorage.removeItem(key),
+    );
   }, []);
 
-  // Sync todos to localStorage
-  useEffect(() => {
-    localStorage.setItem("flowtask_todos", JSON.stringify(todos));
-  }, [todos]);
+  const loadData = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [loadedTodos, loadedUser] = await Promise.all([
+        api.getTodos(),
+        api.getUser(),
+      ]);
+      setTodos(loadedTodos);
+      setUser(loadedUser);
+    } catch (e) {
+      setLoadError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Sync profile to localStorage
+  // Load todos & profile from the API
   useEffect(() => {
-    localStorage.setItem("flowtask_user", JSON.stringify(user));
-  }, [user]);
+    loadData();
+  }, []);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -71,6 +71,9 @@ export default function App() {
   const showToast = (message, type = "success") => {
     setToast({ message, type });
   };
+
+  const showError = (e) =>
+    showToast(e.message || "Something went wrong.", "danger");
 
   const triggerCelebration = (x, y) => {
     try {
@@ -94,89 +97,120 @@ export default function App() {
   };
 
   // --- Profile ---
-  const handleSaveUser = (updatedUser) => {
-    setUser(updatedUser);
-    showToast("Profile updated.");
+  const handleSaveUser = async (updatedUser) => {
+    try {
+      setUser(await api.saveUser(updatedUser));
+      showToast("Profile updated.");
+    } catch (e) {
+      showError(e);
+    }
   };
 
-  const handleResetDemo = () => {
-    setTodos(INITIAL_TODOS);
-    setUser(INITIAL_USER);
-    setSelectedIds([]);
-    showToast("Demo data restored.", "info");
+  const handleResetDemo = async () => {
+    try {
+      const { todos: demoTodos, user: demoUser } = await api.resetDemo();
+      setTodos(demoTodos);
+      setUser(demoUser);
+      setSelectedIds([]);
+      showToast("Demo data restored.", "info");
+    } catch (e) {
+      showError(e);
+    }
   };
 
   // --- CRUD Operations ---
 
   // 1. Create
-  const handleAddTodo = (newTodoData) => {
-    const newTodo = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      ...newTodoData,
-      createdAt: new Date().toISOString(),
-    };
+  const handleAddTodo = async (newTodoData) => {
+    try {
+      const newTodo = await api.createTodo(newTodoData);
+      setTodos((prev) => [newTodo, ...prev]);
+      showToast(`Task "${newTodo.title}" created!`);
 
-    setTodos((prev) => [newTodo, ...prev]);
-    showToast(`Task "${newTodo.title}" created!`);
-
-    if (newTodo.status === "Done") {
-      triggerCelebration();
+      if (newTodo.status === "Done") {
+        triggerCelebration();
+      }
+    } catch (e) {
+      showError(e);
     }
   };
 
   // 2. Update (Title, Status, Priority, Category, etc.)
-  const handleUpdateTodo = (id, updates, clickCoords) => {
-    setTodos((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const updated = { ...item, ...updates };
-          if (item.status !== "Done" && updates.status === "Done") {
-            if (clickCoords) {
-              triggerCelebration(clickCoords.x, clickCoords.y);
-            } else {
-              triggerCelebration();
-            }
-            showToast(`Task completed! 🎉`);
-          } else if (updates.title && updates.title !== item.title) {
-            showToast(`Task updated successfully.`);
-          } else if (updates.status && updates.status !== item.status) {
-            showToast(`Status changed to "${updates.status}".`);
-          }
-          return updated;
-        }
-        return item;
-      }),
-    );
+  const handleUpdateTodo = async (id, updates, clickCoords) => {
+    const item = todos.find((t) => t.id === id);
+    if (!item) return;
+
+    // optimistic update, rolled back if the request fails
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+
+    try {
+      const saved = await api.updateTodo(id, updates);
+      setTodos((prev) => prev.map((t) => (t.id === id ? saved : t)));
+
+      if (item.status !== "Done" && updates.status === "Done") {
+        triggerCelebration(clickCoords?.x, clickCoords?.y);
+        showToast(`Task completed! 🎉`);
+      } else if (updates.title && updates.title !== item.title) {
+        showToast(`Task updated successfully.`);
+      } else if (updates.status && updates.status !== item.status) {
+        showToast(`Status changed to "${updates.status}".`);
+      }
+    } catch (e) {
+      setTodos((prev) => prev.map((t) => (t.id === id ? item : t)));
+      showError(e);
+    }
   };
 
   // 3. Delete
-  const handleDeleteTodo = (id) => {
-    setTodos((prev) => prev.filter((item) => item.id !== id));
-    setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
-    showToast(`Task deleted.`, "info");
+  const handleDeleteTodo = async (id) => {
+    try {
+      await api.deleteTodo(id);
+      setTodos((prev) => prev.filter((item) => item.id !== id));
+      setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
+      showToast(`Task deleted.`, "info");
+    } catch (e) {
+      showError(e);
+    }
   };
 
   // 4. Toggle Star
-  const handleToggleStar = (id) => {
-    setTodos((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const newStarred = !item.starred;
-          showToast(
-            newStarred ? `Task starred as priority ⭐` : `Star removed`,
-            "info",
-          );
-          return { ...item, starred: newStarred };
-        }
-        return item;
-      }),
-    );
+  const handleToggleStar = async (id) => {
+    const item = todos.find((t) => t.id === id);
+    if (!item) return;
+    const starred = !item.starred;
+
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, starred } : t)));
+
+    try {
+      await api.updateTodo(id, { starred });
+      showToast(
+        starred ? `Task starred as priority ⭐` : `Star removed`,
+        "info",
+      );
+    } catch (e) {
+      setTodos((prev) => prev.map((t) => (t.id === id ? item : t)));
+      showError(e);
+    }
   };
 
   // 5. Reorder (Drag & Drop)
-  const handleReorderTodos = (reorderedList) => {
-    setTodos(reorderedList);
-    showToast(`Tasks reordered.`);
+  // `reorderedList` may be a filtered subset: its items take the slots the
+  // subset already occupies, so hidden tasks keep their place.
+  const handleReorderTodos = async (reorderedList) => {
+    const previous = todos;
+    const reorderedIds = new Set(reorderedList.map((t) => t.id));
+    let next = 0;
+    setTodos(
+      todos.map((t) => (reorderedIds.has(t.id) ? reorderedList[next++] : t)),
+    );
+
+    try {
+      await api.reorderTodos(reorderedList.map((t) => t.id));
+      showToast(`Tasks reordered.`);
+    } catch (e) {
+      setTodos(previous);
+      showError(e);
+    }
   };
 
   // --- Bulk Operations ---
@@ -195,31 +229,41 @@ export default function App() {
     setSelectedIds([]);
   };
 
-  const handleBulkStatusChange = (newStatus) => {
+  const handleBulkStatusChange = async (newStatus) => {
     if (selectedIds.length === 0) return;
 
-    setTodos((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: newStatus } : item,
-      ),
-    );
+    try {
+      await api.bulkStatus(selectedIds, newStatus);
+      setTodos((prev) =>
+        prev.map((item) =>
+          selectedIds.includes(item.id) ? { ...item, status: newStatus } : item,
+        ),
+      );
 
-    showToast(`Updated ${selectedIds.length} tasks to "${newStatus}"!`);
-    if (newStatus === "Done") {
-      triggerCelebration();
+      showToast(`Updated ${selectedIds.length} tasks to "${newStatus}"!`);
+      if (newStatus === "Done") {
+        triggerCelebration();
+      }
+      setSelectedIds([]);
+    } catch (e) {
+      showError(e);
     }
-    setSelectedIds([]);
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
     if (
       window.confirm(`Are you sure you want to delete ${count} selected tasks?`)
     ) {
-      setTodos((prev) => prev.filter((item) => !selectedIds.includes(item.id)));
-      setSelectedIds([]);
-      showToast(`Deleted ${count} tasks.`, "danger");
+      try {
+        await api.bulkDelete(selectedIds);
+        setTodos((prev) => prev.filter((item) => !selectedIds.includes(item.id)));
+        setSelectedIds([]);
+        showToast(`Deleted ${count} tasks.`, "danger");
+      } catch (e) {
+        showError(e);
+      }
     }
   };
 
@@ -278,6 +322,28 @@ export default function App() {
     setStarredOnly(false);
     setSelectedCategory("All");
   };
+
+  if (loading || loadError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 text-center">
+        {loadError ? (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm text-slate-700">
+              Could not reach the server: {loadError}
+            </p>
+            <button
+              onClick={loadData}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Loading your tasks…</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-indigo-500 selection:text-white">

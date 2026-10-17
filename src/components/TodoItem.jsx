@@ -11,7 +11,7 @@ import {
   Save,
   Tag
 } from 'lucide-react';
-import { STATUS_OPTIONS, PRIORITY_OPTIONS, CATEGORIES } from '../constants/initialData';
+import { STATUS_OPTIONS, PRIORITY_OPTIONS, CATEGORIES } from '../constants/options';
 
 export default function TodoItem({
   todo,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Search, X, CheckSquare, Square, Trash2, CheckCircle2, Clock, Star, Filter } from 'lucide-react';
-import { CATEGORIES } from '../constants/initialData';
+import { CATEGORIES } from '../constants/options';
 
 export default function TodoFilters({
   activeStatus,
