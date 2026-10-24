@@ -2,8 +2,10 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { User } from '../../user/entities/user.entity.js';
 
 @Entity()
 export class Todo {
@@ -25,4 +27,8 @@ export class Todo {
   position: number;
   @CreateDateColumn()
   createdAt: Date;
+  @ManyToOne(() => User, (u) => u.todos)
+  owner: User;
+  @Column()
+  ownerId: string;
 }

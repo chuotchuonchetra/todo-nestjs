@@ -40,9 +40,10 @@ export default function App() {
     setLoading(true);
     setLoadError(null);
     try {
+      // the profile is optional: the server may not expose /user (yet)
       const [loadedTodos, loadedUser] = await Promise.all([
         api.getTodos(),
-        api.getUser(),
+        api.getUser().catch(() => null),
       ]);
       setTodos(loadedTodos);
       setUser(loadedUser);

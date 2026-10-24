@@ -1,28 +1,22 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { TodoModule } from './todo/todo.module.js';
 import { UserModule } from './user/user.module.js';
-import { DemoModule } from './demo/demo.module.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
   imports: [
     TodoModule,
     UserModule,
-    DemoModule,
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST ?? 'localhost',
-      port: Number(process.env.DB_PORT ?? 5432),
-      username: 'postgres',
-      password: 'postgres',
-      database: 'todo-db',
+      type: process.env.DATABASE_TYPE as any,
+      host: process.env.DATABASE_HOST,
+      port: Number(process.env.DATABASE_PORT),
+      username: process.env.DATABASE_USERNAME,
+      password: process.env.DATABASE_PASSWORD,
+      database: process.env.DATABASE_NAME,
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: false,
     }),
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

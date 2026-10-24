@@ -36,6 +36,7 @@ export default function Header({ user, onSaveUser, onResetDemo }) {
           FlowTask
         </div>
 
+        {user && (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
@@ -54,9 +55,10 @@ export default function Header({ user, onSaveUser, onResetDemo }) {
             <span className="text-[11px] text-slate-500">@{user.username}</span>
           </span>
         </button>
+        )}
       </header>
 
-      {isOpen && (
+      {user && isOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40"
           onClick={() => setIsOpen(false)}
