@@ -19,14 +19,14 @@ export class TodosService {
     if (!todo) throw new NotFoundException(`Todo ${id} not found`);
     return todo;
   }
-  async create(dto: CreateTodoDto) {
+  async create(dto: CreateTodoDto, ownerId: string) {
     // new tasks go to the top of the list, like the UI prepends them
     const { min } = (await this.repo
       .createQueryBuilder('t')
       .select('MIN(t.position)', 'min')
       .getRawOne<{ min: number | null }>())!;
     const position = (min ?? 1) - 1;
-    return this.repo.save(this.repo.create({ ...dto, position }));
+    return this.repo.save(this.repo.create({ ...dto, ownerId, position }));
   }
   async update(id: string, dto: UpdateTodoDto) {
     const todo = await this.findOne(id);

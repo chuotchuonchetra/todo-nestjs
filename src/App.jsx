@@ -6,12 +6,15 @@ import TodoForm from "./components/TodoForm";
 import TodoFilters from "./components/TodoFilters";
 import TodoList from "./components/TodoList";
 import Toast from "./components/Toast";
+import Login from "./components/Login";
 import { api } from "./api";
 
 export default function App() {
   // Server data
   const [todos, setTodos] = useState([]);
   const [user, setUser] = useState(null);
+  // null = checking the refresh cookie, false = logged out, true = logged in
+  const [authed, setAuthed] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
@@ -54,10 +57,28 @@ export default function App() {
     }
   };
 
-  // Load todos & profile from the API
+  // On app start: restore the session from the refresh cookie
   useEffect(() => {
-    loadData();
+    api.restoreSession().then(setAuthed);
   }, []);
+
+  // Load todos & profile once logged in
+  useEffect(() => {
+    if (authed) loadData();
+  }, [authed]);
+
+  const handleAuth = async (mode, email, password) => {
+    await (mode === "login" ? api.login : api.register)(email, password);
+    setAuthed(true);
+  };
+
+  const handleLogout = async () => {
+    await api.logout().catch(() => {});
+    setTodos([]);
+    setUser(null);
+    setLoading(true);
+    setAuthed(false);
+  };
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -324,6 +345,9 @@ export default function App() {
     setSelectedCategory("All");
   };
 
+  if (authed === null) return null;
+  if (!authed) return <Login onSubmit={handleAuth} />;
+
   if (loading || loadError) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 text-center">
@@ -408,6 +432,9 @@ export default function App() {
         {/* App Footer */}
         <footer className="text-center py-6 text-xs text-slate-400">
           <p>FlowTask — Built with React & Tailwind CSS (Light Mode)</p>
+          <button onClick={handleLogout} className="mt-2 underline hover:text-slate-600">
+            Log out
+          </button>
         </footer>
       </div>
     </div>
