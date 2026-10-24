@@ -4,6 +4,7 @@ import {
   Entity,
   ManyToOne,
   PrimaryGeneratedColumn,
+  type Relation,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity.js';
 
@@ -28,7 +29,7 @@ export class Todo {
   @CreateDateColumn()
   createdAt: Date;
   @ManyToOne(() => User, (u) => u.todos)
-  owner: User;
+  owner: Relation<User>;
   @Column()
   ownerId: string;
 }

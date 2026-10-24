@@ -3,6 +3,7 @@ import {
   Entity,
   OneToMany,
   PrimaryGeneratedColumn,
+  type Relation,
 } from 'typeorm';
 import { Todo } from '../../todo/entities/todo.entity.js';
 import { Role } from '../role.enum.js';
@@ -15,8 +16,8 @@ export class User {
   email: string;
   @Column({ select: false })
   passwordHash: string;
-  @Column({ type: 'enum', enum: Role })
+  @Column({ type: 'enum', enum: Role, default: Role.User })
   role: Role;
   @OneToMany(() => Todo, (t) => t.owner)
-  todos: Todo[];
+  todos: Relation<Todo>[];
 }

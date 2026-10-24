@@ -10,6 +10,8 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import type { AuthUser } from '../auth/jwt.strategy.js';
 import { CreateTodoDto } from './dto/create-todo.dto.js';
 import { UpdateTodoDto } from './dto/update-todo.dto.js';
 import { BulkStatusDto, TodoIdsDto } from './dto/todo-ids.dto.js';
@@ -23,8 +25,8 @@ export class TodosController {
     return this.todos.findAll();
   }
   @Post()
-  create(@Body() dto: CreateTodoDto) {
-    return this.todos.create(dto); // 201 by default
+  create(@Body() dto: CreateTodoDto, @CurrentUser() user: AuthUser) {
+    return this.todos.create(dto, user.id); // owner from the token; 201 by default
   }
   // static routes must stay above ':id'
   @Put('reorder')
